@@ -1,0 +1,121 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: moderation_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd backend && npm ci
+
+    - name: Lint frontend
+      run: npm run lint
+
+    - name: Lint backend
+      run: cd backend && npm run lint
+
+    - name: Type check frontend
+      run: npm run typecheck
+
+    - name: Build frontend
+      run: npm run build
+
+    - name: Build backend
+      run: cd backend && npm run build
+
+    - name: Run backend tests
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/moderation_test
+        JWT_SECRET: test-secret
+      run: cd backend && npm test
+
+    - name: Start backend for E2E tests
+      env:
+        NODE_ENV: test
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/moderation_test
+        JWT_SECRET: test-secret
+        PORT: 4000
+      run: |
+        cd backend && npm start &
+        sleep 10
+
+    - name: Run E2E tests
+      run: |
+        npm start &
+        sleep 10
+        npx cypress run
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build frontend image
+      run: docker build -t community-moderator-frontend .
+
+    - name: Build backend image
+      run: docker build -t community-moderator-backend ./backend
+
+    - name: Test Docker Compose
+      run: |
+        docker-compose up -d
+        sleep 30
+        curl -f http://localhost:4000/api/health
+        curl -f http://localhost:3000
+        docker-compose down
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
