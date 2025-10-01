@@ -37,7 +37,7 @@ Built with **React, Node.js, PostgreSQL**, and integrated AI services.
 
 ### 1. Clone Repo
 ```bash
-git clone (https://github.com/arun78787/community-moderator-curator.git)
+git clone https://github.com/arun78787/community-moderator-curator.git
 cd community-moderator-curator
 
 # Login Accounts
