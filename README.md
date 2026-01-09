@@ -3,6 +3,8 @@
 An AI-powered content moderation and curation platform for online communities.  
 Built with **React, Node.js, PostgreSQL**, and integrated AI services.
 
+Demo Link : https://youtu.be/c79gBqV-w_E?si=UdKYHEXaZyqTJUP6
+
 ---
 
 ## 🚀 Features
